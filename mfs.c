@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <stdint.h>
 
 #define WHITESPACE " \t\n"      // We want to split our command line up into tokens
                                 // so we need to define what delimits our tokens.
@@ -43,15 +44,40 @@
 
 #define OPEN 1                  //file is open
 
-void info(FILE *fp);
 
 
+struct __attribute__((packed)) DirectoryEntry {
+  char DIR_Name[11];
+  uint8_t DIR_Attr;
+  uint8_t Unused1[8];
+  uint16_t DIR_FirstClusterHigh;
+  uint8_t Unused2[4];
+  uint16_t DIR_FirstClusterLow;
+  uint32_t DIR_FileSize;
+};
+
+struct fatSpec
+{
+    int16_t BPB_BytsPerSec;
+    int8_t BPB_SecPerClus;
+    int16_t BPB_RsvdSecCnt;
+    int8_t BPB_NumFats;
+    int32_t BPB_FATSz32;
+};
+
+
+
+void getInfo(FILE *fp, struct fatSpec* specs);
+void printInfo(struct fatSpec* specs);
 
 int main()
 {
   //keeps track if the file is open or closed
   int filestat = CLOSED;
   FILE* fp;
+  struct fatSpec* specs = (struct fatSpec*)malloc(sizeof(struct fatSpec));
+  struct DirectoryEntry dir[16];
+
 
 
   char * cmd_str = (char*) malloc( MAX_COMMAND_SIZE );
@@ -125,8 +151,30 @@ int main()
             if(fp == NULL)
                 printf("Error: File system image not found.\n");
             else
+            {
                 //set file to open
                 filestat = OPEN;
+                //read in the root directory
+
+                getInfo(fp, specs);
+                /*
+                int rootDirectoryAddress = (specs->BPB_NumFats*specs->BPB_FATSz32*
+                    specs->BPB_BytsPerSec)+(specs->BPB_RsvdSecCnt*specs->BPB_BytsPerSec);
+
+
+                fseek(fp, rootDirectoryAddress, SEEK_SET);
+                int i=0;
+                for(i;i<16;i++)
+                {
+                    fread(&(dir[i].DIR_Name), sizeof(char)*11, 1,fp);
+                    fseek(fp,rootDirectoryAddress+(32*i), SEEK_SET);
+                    printf("thing: %s\n",dir[i].DIR_Name);
+
+                }
+                */
+
+
+            }
 
         }
 
@@ -146,7 +194,7 @@ int main()
     //calls the info command
     else if(strcmp(token[0],"info")==0)
     {
-        info(fp);
+        printInfo(specs);
 
     }
 
@@ -158,14 +206,16 @@ int main()
 
   }
 
+  free(specs);
   return 0;
+
 }
 
 
 //takes the file pointer as a parameter
 //prints out the bytes per sector, sectors per cluster, Reserved sector count, number of fats
 //and the fat size in decimal and hexadecimal for the fat32 file system image
-void info(FILE *fp)
+void getInfo(FILE *fp, struct fatSpec* specs)
 {
     int16_t BPB_BytsPerSec;
     int8_t BPB_SecPerClus;
@@ -174,32 +224,34 @@ void info(FILE *fp)
     int32_t BPB_FATSz32;
 
     //for each variable, sets fp pointer to the appropriate byte in the file according to the
-    //spec, reads the file then prints the values
+    //spec, reads the file
     fseek(fp, 11, SEEK_SET);
-    fread(&BPB_BytsPerSec, sizeof(int16_t), 1,fp);
-    printf("BPB_BytesPerSec: %d, %x\n",BPB_BytsPerSec, BPB_BytsPerSec);
+    fread(&(specs->BPB_BytsPerSec), sizeof(int16_t), 1,fp);
 
 
     fseek(fp, 13, SEEK_SET);
-    fread(&BPB_SecPerClus, sizeof(int8_t), 1, fp);
-    printf("BPB_SecPerClus: %d, %x\n",BPB_SecPerClus, BPB_SecPerClus);
+    fread(&(specs->BPB_SecPerClus), sizeof(int8_t), 1, fp);
+
 
     fseek(fp,14, SEEK_SET );
-    fread(&BPB_RsvdSecCnt, sizeof(int16_t), 1, fp);
-    printf("BPB_RsvdSecCnt: %d, %x\n",BPB_RsvdSecCnt, BPB_RsvdSecCnt);
+    fread(&(specs->BPB_RsvdSecCnt), sizeof(int16_t), 1, fp);
+
 
     fseek(fp, 16, SEEK_SET);
-    fread(&BPB_NumFats, sizeof(int8_t), 1, fp);
-    printf("BPB_NumFats: %d, %x\n",BPB_NumFats, BPB_NumFats);
+    fread(&(specs->BPB_NumFats), sizeof(int8_t), 1, fp);
 
 
     fseek(fp, 36, SEEK_SET);
-    fread(&BPB_FATSz32, sizeof(int32_t), 1, fp);
-    printf("BPB_FATSz32: %d, %x\n", BPB_FATSz32, BPB_FATSz32);
+    fread(&(specs->BPB_FATSz32), sizeof(int32_t), 1, fp);
 
+}
 
+void printInfo(struct fatSpec* specs)
+{
 
-
-
-
+    printf("BPB_BytesPerSec: %d, %x\n",specs->BPB_BytsPerSec, specs->BPB_BytsPerSec);
+    printf("BPB_SecPerClus: %d, %x\n",specs->BPB_SecPerClus, specs->BPB_SecPerClus);
+    printf("BPB_RsvdSecCnt: %d, %x\n",specs->BPB_RsvdSecCnt, specs->BPB_RsvdSecCnt);
+    printf("BPB_NumFats: %d, %x\n",specs->BPB_NumFats, specs->BPB_NumFats);
+    printf("BPB_FATSz32: %d, %x\n", specs->BPB_FATSz32, specs->BPB_FATSz32);
 }
