@@ -30,6 +30,7 @@
 #include <string.h>
 #include <signal.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #define WHITESPACE " \t\n"      // We want to split our command line up into tokens
                                 // so we need to define what delimits our tokens.
@@ -65,10 +66,14 @@ struct fatSpec
     int32_t BPB_FATSz32;
 };
 
-
+struct DirectoryEntry dir[16];
 
 void getInfo(FILE *fp, struct fatSpec* specs);
 void printInfo(struct fatSpec* specs);
+void stringToLower(char* str);
+int fileNameCmp(char input[], char strp[]);
+void popRootDir(FILE *fp, struct fatSpec* specs);
+void stat(char input[]);
 
 int main()
 {
@@ -76,7 +81,7 @@ int main()
   int filestat = CLOSED;
   FILE* fp;
   struct fatSpec* specs = (struct fatSpec*)malloc(sizeof(struct fatSpec));
-  struct DirectoryEntry dir[16];
+
 
 
 
@@ -124,16 +129,6 @@ int main()
         token_count++;
     }
 
-    // Now print the tokenized input as a debug check
-    // \TODO Remove this code and replace with your shell functionality
-
-    int token_index  = 0;
-    for( token_index = 0; token_index < token_count; token_index ++ )
-    {
-      printf("token[%d] = %s\n", token_index, token[token_index] );
-    }
-
-    //start here
 
     //The open command, takes the file name as the parameter, if file is already open
     //or file not found prints an error and gets ready for another command
@@ -157,21 +152,8 @@ int main()
                 //read in the root directory
 
                 getInfo(fp, specs);
-                /*
-                int rootDirectoryAddress = (specs->BPB_NumFats*specs->BPB_FATSz32*
-                    specs->BPB_BytsPerSec)+(specs->BPB_RsvdSecCnt*specs->BPB_BytsPerSec);
+                popRootDir(fp, specs);
 
-
-                fseek(fp, rootDirectoryAddress, SEEK_SET);
-                int i=0;
-                for(i;i<16;i++)
-                {
-                    fread(&(dir[i].DIR_Name), sizeof(char)*11, 1,fp);
-                    fseek(fp,rootDirectoryAddress+(32*i), SEEK_SET);
-                    printf("thing: %s\n",dir[i].DIR_Name);
-
-                }
-                */
 
 
             }
@@ -197,9 +179,12 @@ int main()
         printInfo(specs);
 
     }
+    //prints out the attribute and file size of the given file if it exists
+    else if(strcmp(token[0],"stat")==0)
+    {
 
-
-
+        stat(token[1]);
+    }
 
 
     free( working_root );
@@ -212,9 +197,9 @@ int main()
 }
 
 
-//takes the file pointer as a parameter
-//prints out the bytes per sector, sectors per cluster, Reserved sector count, number of fats
-//and the fat size in decimal and hexadecimal for the fat32 file system image
+//takes the file pointer as a parameter and structure to hold the specs
+//stores the bytes per sector, sectors per cluster, Reserved sector count, number of fats
+//and the fat size in the structure
 void getInfo(FILE *fp, struct fatSpec* specs)
 {
     int16_t BPB_BytsPerSec;
@@ -246,6 +231,7 @@ void getInfo(FILE *fp, struct fatSpec* specs)
 
 }
 
+//given the structure that holds the specs and prints them out
 void printInfo(struct fatSpec* specs)
 {
 
@@ -254,4 +240,106 @@ void printInfo(struct fatSpec* specs)
     printf("BPB_RsvdSecCnt: %d, %x\n",specs->BPB_RsvdSecCnt, specs->BPB_RsvdSecCnt);
     printf("BPB_NumFats: %d, %x\n",specs->BPB_NumFats, specs->BPB_NumFats);
     printf("BPB_FATSz32: %d, %x\n", specs->BPB_FATSz32, specs->BPB_FATSz32);
+}
+
+//get a pointer to a string and changes all the letters to lowercase
+void stringToLower(char* str)
+{
+    int i;
+    for(i = 0;i<strlen(str);i++)
+        str[i] = tolower(str[i]);
+
+
+}
+
+//has two file names as the input
+//compares the strings to determine if they are the same ignoring case
+//and the period and spaces in the filename
+//return 1 if they are the same, returns 0 if not
+int fileNameCmp(char input[], char str[])
+{
+    int inputlen = strlen(input);
+    int i = 0, j = 0;
+
+    for(i;i<inputlen;i++)
+    {
+        if(input[i]=='.')
+        {
+            while(str[j]==' ')
+                j++;
+            j--;
+        }
+        else if(input[i]!=str[j])
+        {
+            return 0;
+        }
+
+        j++;
+    }
+
+    return 1;
+
+}
+
+//gets the file pointer and the spec structure pointer and populates the home directory
+void popRootDir(FILE *fp, struct fatSpec* specs)
+{
+    int rootAddress = (specs->BPB_NumFats*specs->BPB_FATSz32*specs->BPB_BytsPerSec)
+                +(specs->BPB_RsvdSecCnt*specs->BPB_BytsPerSec);
+
+    fseek(fp, rootAddress, SEEK_SET);
+    int i;
+
+    //populates the home directory
+    for(i=0;i<16;i++)
+    {
+
+        fread(&dir[i],sizeof(struct DirectoryEntry),1,fp);
+
+        dir[i].DIR_Name[12] = '\0';
+
+        //changes the file name to lowercase to be case insensitive
+        char* dirName = dir[i].DIR_Name;
+        stringToLower(dirName);
+
+        printf("filename: %s\n", dir[i].DIR_Name);
+        printf("attribute: %#02x\n", dir[i].DIR_Attr);
+        printf("file size: %"PRIu32"\n", dir[i].DIR_FileSize);
+
+
+    }
+
+}
+
+//get a file  name, checks if it is in the home directory
+//then prints the attributes of the file
+void stat(char input[])
+{
+    int i = 0;
+
+    //no file name given
+    if(input == NULL)
+    {
+        printf("Error: File not found\n");
+        return;
+    }
+
+    //changes the given file name to lowercase to be case insensitive
+    char* tok = input;
+    stringToLower(tok);
+
+    //searches the structure for the file
+    while(fileNameCmp(input,dir[i].DIR_Name)==0&&i<16)
+    {
+        i++;
+    }
+
+    //prints the attributes if the file exists
+    if(i==16) printf("Error: File not found\n");
+    else
+    {
+        printf("attribute %#02x\n",dir[i].DIR_Attr);
+        printf("Starting Cluster Number: %u\n",dir[i].DIR_FirstClusterLow);
+        printf("File size: %"PRIu32"\n",dir[i].DIR_FileSize);
+    }
 }
