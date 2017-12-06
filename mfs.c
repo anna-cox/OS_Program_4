@@ -79,7 +79,7 @@ void stat(char input[]);
 int LBAToOffset(int32_t sector, struct fatSpec* specs);
 int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp);
 void get(char input[], struct fatSpec* specs, FILE* fp);
-
+void fileRead(int startByte, int numBytes, char filename[], FILE* fp, struct fatSpec* specs);
 
 void cd(char input[]);
 void ls();
@@ -104,7 +104,7 @@ int main()
     printf ("msh> ");
 
 
-    // Read the command from the commandline.  The
+    // the command from the commandline.  The
     // maximum command that will be read is MAX_COMMAND_SIZE
     // This while command will wait here until the user
     // inputs something since fgets returns NULL when there
@@ -212,22 +212,7 @@ int main()
             printf("Please give a filename\n");
         else
         {
-            int i = 0;
-            while(fileNameCmp(token[1],dir[i].DIR_Name)==0&&i<16)
-            {
-                i++;
-            }
-
-            //prints the attributes if the file exists
-            if(i==16) printf("Error: File not found\n");
-            else
-            {
-                int len = atoi(token[3]);
-                char data[len];
-                //set the file pointer
-                fread(data, sizeof(data), 1, fp);
-                printf(data);
-            }
+            fileRead(atoi(token[2]), atoi(token[3]),token[1], fp, specs);
         }
 
     }
@@ -346,7 +331,7 @@ void popRootDir(FILE *fp, struct fatSpec* specs)
 
         fread(&dir[i],sizeof(struct DirectoryEntry),1,fp);
 
-	dir[i].DIR_Name[12] = '\0';
+        dir[i].DIR_Name[12] = '\0';
         //changes the file name to lowercase to be case insensitive
         char* dirName = dir[i].DIR_Name;
         stringToLower(dirName);
@@ -404,11 +389,13 @@ void get(char input[], struct fatSpec* specs, FILE* fp)
     else
     {
 
+
         writeFile = fopen(input,"w");
 
         int32_t cluster = dir[i].DIR_FirstClusterLow;
+
+
         int clusSize = (specs->BPB_SecPerClus*specs->BPB_BytsPerSec);
-        printf("clusSize: %n\n",clusSize);
 
         while(cluster!=-1)
         {
@@ -419,12 +406,9 @@ void get(char input[], struct fatSpec* specs, FILE* fp)
 
             fread(data, sizeof(data), 1, fp);
 
-            printf("Data:%s\n", data);
             fwrite(data,1, sizeof(data), writeFile);
             cluster = NextLB(cluster, specs, fp);
         }
-
-
 
         fclose(writeFile);
 
@@ -472,4 +456,59 @@ void ls()
         	printf("filename: %s\n", dir[i].DIR_Name);
 
     }
+}
+
+void fileRead(int startByte, int numBytes, char filename[], FILE* fp, struct fatSpec* specs)
+{
+
+    int i = 0;
+    while(fileNameCmp(filename,dir[i].DIR_Name)==0&&i<16)
+    {
+        i++;
+    }
+
+    int secSize = specs->BPB_BytsPerSec;
+    if(i==16)
+    {
+        printf("Error: File not found\n");
+        return;
+    }
+    char data[specs->BPB_BytsPerSec];
+
+    int startClus = dir[i].DIR_FirstClusterLow;
+    int offset = LBAToOffset(startClus, specs) + startByte;
+    fseek(fp, offset, SEEK_SET);
+
+
+    if(numBytes<secSize+startByte)
+    {
+        fread(data,numBytes , 1, fp);
+
+        data[numBytes] = '\0';
+        printf(data);
+        printf("\n");
+        return;
+    }
+
+    numBytes = numBytes - secSize + startByte;
+
+    fread(data,secSize - startByte , 1, fp);
+    printf(data);
+
+
+
+    while(numBytes>secSize)
+    {
+        fread(data,secSize, 1, fp);
+        printf(data);
+        numBytes - secSize;
+    }
+
+    fread(data,numBytes , 1, fp);
+    data[numBytes+1] = '\0';
+    printf(data);
+
+    printf("\n");
+
+
 }
