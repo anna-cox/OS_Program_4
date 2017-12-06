@@ -64,6 +64,7 @@ struct fatSpec
     int16_t BPB_RsvdSecCnt;
     int8_t BPB_NumFats;
     int32_t BPB_FATSz32;
+    char VOL_Name[11];
 };
 
 struct DirectoryEntry dir[16];
@@ -81,8 +82,11 @@ int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp);
 void get(char input[], struct fatSpec* specs, FILE* fp);
 
 
-void cd(char input[]);
+int findFile(char *operand);
+
+
 void ls();
+void printVol(struct fatSpec* specs);
 
 int main()
 {
@@ -233,9 +237,50 @@ int main()
     }
     else if(strcmp(token[0],"volume")==0)
     {
-
+	printVol(specs);
+    }
+    else if(strcmp(token[0], "ls")==0)
+    {
+	ls();
     }
 
+    else if(strcmp(token[0], "cd")==0)
+    {
+	int index, offset, j;
+	if(token[1] != NULL)
+	{
+	    char * working_token = (char *) strtok(token[1], "/");
+	    while(working_token != NULL)
+	    {
+		if(strcmp(working_token, "..")==0)
+		{
+		    if(dir[1].DIR_Attr == 0x10 && dir[1].DIR_FirstClusterLow != 0)
+			offset = LBAToOffset(dir[1].DIR_FirstClusterLow, specs);
+		    else
+			offset = (specs->BPB_NumFats * specs->BPB_FATSz32 * specs->BPB_BytsPerSec) + (specs->BPB_RsvdSecCnt * specs->BPB_BytsPerSec);    
+		}
+		else if(!strcmp(working_token, "."))
+		    continue;
+		else
+		{
+		    index = findFile(working_token);   
+		    if (index>0)  
+			offset = LBAToOffset(dir[index].DIR_FirstClusterLow, specs);
+		    else
+			printf("Error: Specified folder or path not found in file system\n");
+		}
+		fseek(fp, offset, SEEK_SET);
+                for(j=0; j<16; j++)
+		{
+		    memset(&dir[j].DIR_Name,0,32);
+		    fread(&dir[j],sizeof(struct DirectoryEntry),1,fp);
+		}
+		working_token = strtok(NULL,"/");
+	    };
+	}
+	else
+	    printf("Not a valid folder or path.\n");
+    }
     free( working_root );
 
   }
@@ -257,6 +302,7 @@ void getInfo(FILE *fp, struct fatSpec* specs)
     int16_t BPB_RsvdSecCnt;
     int8_t BPB_NumFats;
     int32_t BPB_FATSz32;
+    char Vol_name[11];
 
     //for each variable, sets fp pointer to the appropriate byte in the file according to the
     //spec, reads the file
@@ -278,6 +324,8 @@ void getInfo(FILE *fp, struct fatSpec* specs)
 
     fseek(fp, 36, SEEK_SET);
     fread(&(specs->BPB_FATSz32), sizeof(int32_t), 1, fp);
+    fseek(fp, 71, SEEK_SET);
+    fread(&(specs->VOL_Name), 11, 1, fp);
 
 }
 
@@ -290,6 +338,12 @@ void printInfo(struct fatSpec* specs)
     printf("BPB_RsvdSecCnt: %d, %x\n",specs->BPB_RsvdSecCnt, specs->BPB_RsvdSecCnt);
     printf("BPB_NumFats: %d, %x\n",specs->BPB_NumFats, specs->BPB_NumFats);
     printf("BPB_FATSz32: %d, %x\n", specs->BPB_FATSz32, specs->BPB_FATSz32);
+}
+
+//given the specs structure, prints out the Volume Name if there is one
+void printVol(struct fatSpec* specs)
+{
+    printf("Volume Name: %s\n", specs->VOL_Name);
 }
 
 //get a pointer to a string and changes all the letters to lowercase
@@ -449,11 +503,6 @@ int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp)
 }
 
 
-void cd(char input[])
-{
-
-}
-
 void ls()
 {
     int i;
@@ -462,14 +511,34 @@ void ls()
     for(i=0;i<16;i++)
     {
 
-
-        dir[i].DIR_Name[12] = '\0';
-
         //changes the file name to lowercase to be case insensitive
         char* dirName = dir[i].DIR_Name;
         stringToLower(dirName);
-	if (dir[i].DIR_Attr == 0x01 || dir[i].DIR_Attr == 0x10 || dir[i].DIR_Attr == 0x20)
-        	printf("filename: %s\n", dir[i].DIR_Name);
+	if ((dir[i].DIR_Attr == 0x01 || dir[i].DIR_Attr == 0x10 || dir[i].DIR_Attr == 0x20 || dir[i].DIR_Attr == 0x30) && dir[i].DIR_Name[0] != 0xffffffe5)
+        	printf("%d\t%d\t%x\t%s\n",dir[i].DIR_FirstClusterLow, dir[i].DIR_FileSize, dir[i].DIR_Attr, dir[i].DIR_Name);
 
     }
+}
+
+
+int findFile(char * operand)
+{
+    int k;
+    char f_name[12], i_name[12];
+    memset(f_name, 32, 11);
+    f_name[12] = '\0';
+    i_name[12] = '\0';
+    char* find = (char *) strtok(operand, ".");
+    strncpy(f_name, find, strlen(find));
+    find = strtok(NULL, ".");
+    if(find != NULL)
+	strcpy(&f_name[8], find);
+    for(k = 0; k<16; k++)
+    {
+	memset(i_name, 32, 10);
+	strncpy(i_name, dir[k].DIR_Name,11);
+	if(!strncasecmp(f_name, i_name, 11))
+		return k;
+    }   
+    return -1;
 }
