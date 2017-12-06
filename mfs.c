@@ -105,7 +105,7 @@ int main()
   {
 
     // Print out the msh prompt
-    printf ("msh> ");
+    printf ("mfs> ");
 
 
     // the command from the commandline.  The
@@ -510,8 +510,8 @@ int findFile(char * operand)
     int k;
     char f_name[12], i_name[12];
     memset(f_name, 32, 11);
-    f_name[12] = '\0';
-    i_name[12] = '\0';
+    f_name[11] = 0;
+    i_name[11] = 0;
     char* find = (char *) strtok(operand, ".");
     strncpy(f_name, find, strlen(find));
     find = strtok(NULL, ".");
