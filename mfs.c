@@ -195,6 +195,7 @@ int main()
 
         stat(token[1]);
     }
+    //adds the specified file to the working directory
     else if(strcmp(token[0],"get")==0)
     {
         if(token[1]==NULL)
@@ -202,6 +203,7 @@ int main()
         else
             get(token[1],specs, fp);
     }
+    //prints the number of specified bytes starting from the start byte from the given filename
     else if(strcmp(token[0],"read")==0)
     {
         if(token[3]==NULL)
@@ -380,8 +382,11 @@ void stat(char input[])
     }
 }
 
+//parameters are a filename, a fat spec struct and the file pointer to the fat32 image
+//if found, copies the file to put it in the working directory
 void get(char input[], struct fatSpec* specs, FILE* fp)
 {
+    //seraches for the file in the current directory
     int i = 0;
     while(fileNameCmp(input,dir[i].DIR_Name)==0&&i<16) i++;
     if(i>=16)
@@ -389,21 +394,20 @@ void get(char input[], struct fatSpec* specs, FILE* fp)
     else
     {
 
-
+        //the file to be written to, given the name of the file it is copied from
         writeFile = fopen(input,"w");
-
         int32_t cluster = dir[i].DIR_FirstClusterLow;
-
-
         int clusSize = (specs->BPB_SecPerClus*specs->BPB_BytsPerSec);
+
 
         while(cluster!=-1)
         {
-
+            //sets the file pointer the offset based on the current sector number
             char data[clusSize];
             int address = LBAToOffset(cluster, specs);
             fseek(fp,address,SEEK_SET );
 
+            //read the data into a variable them writes it to the file
             fread(data, sizeof(data), 1, fp);
 
             fwrite(data,1, sizeof(data), writeFile);
@@ -461,26 +465,43 @@ void ls()
 void fileRead(int startByte, int numBytes, char filename[], FILE* fp, struct fatSpec* specs)
 {
 
+    //searches for the file, if not found, return
     int i = 0;
+
     while(fileNameCmp(filename,dir[i].DIR_Name)==0&&i<16)
     {
         i++;
     }
 
-    int secSize = specs->BPB_BytsPerSec;
+
     if(i==16)
     {
         printf("Error: File not found\n");
         return;
     }
+
+    //string to hold the data to be printed
     char data[specs->BPB_BytsPerSec];
 
-    int startClus = dir[i].DIR_FirstClusterLow;
-    int offset = LBAToOffset(startClus, specs) + startByte;
+    int secSize = specs->BPB_BytsPerSec;
+
+    //set the file pointer to the beginning of where we want to start reading
+    int16_t startClus = dir[i].DIR_FirstClusterLow;
+    int start = startByte;
+    if(start>secSize)
+        while(start>secSize)
+        {
+            startClus = NextLB(startClus, specs, fp);
+            start = start - secSize;
+        }
+
+    int16_t nextBlock;
+    int offset = LBAToOffset(startClus, specs) + start;
+
     fseek(fp, offset, SEEK_SET);
 
-
-    if(numBytes<secSize+startByte)
+    //the bytes we want to read do not span more than one cluster
+    if(numBytes<secSize-start)
     {
         fread(data,numBytes , 1, fp);
 
@@ -490,22 +511,38 @@ void fileRead(int startByte, int numBytes, char filename[], FILE* fp, struct fat
         return;
     }
 
+    //the bytes we want to read do span more than one cluster
+    //read the first bytes before the end of the first cluster
     numBytes = numBytes - secSize + startByte;
-
     fread(data,secSize - startByte , 1, fp);
+    data[secSize - startByte] = '\0';
     printf(data);
 
+    nextBlock = NextLB(startClus, specs, fp);
+    offset = LBAToOffset(nextBlock, specs);
+    fseek(fp, offset, SEEK_SET);
 
 
+    //reads the bytes that span full clusters
     while(numBytes>secSize)
     {
+
+
         fread(data,secSize, 1, fp);
+        data[secSize] = '\0';
         printf(data);
-        numBytes - secSize;
+        numBytes = numBytes - secSize;
+
+        //move fp to the next block of data
+        nextBlock = NextLB(nextBlock, specs, fp);
+        offset = LBAToOffset(nextBlock, specs);
+        fseek(fp, offset, SEEK_SET);
+
     }
 
+    //reads the remaining bytes in the last cluster
     fread(data,numBytes , 1, fp);
-    data[numBytes+1] = '\0';
+    data[numBytes] = '\0';
     printf(data);
 
     printf("\n");
