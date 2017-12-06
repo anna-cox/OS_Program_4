@@ -41,7 +41,7 @@
 
 #define MAX_NUM_ARGUMENTS 5     // Mav shell only supports five arguments
 
-#define CLOSED 0                //file is CLOSED
+#define CLOSED 0	                //file is CLOSED
 
 #define OPEN 1                  //file is open
 
@@ -75,9 +75,14 @@ void stringToLower(char* str);
 int fileNameCmp(char input[], char strp[]);
 void popRootDir(FILE *fp, struct fatSpec* specs);
 void stat(char input[]);
+<<<<<<< HEAD
 int LBAToOffset(int32_t sector, struct fatSpec* specs);
 int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp);
 void get(char input[], struct fatSpec* specs, FILE* fp);
+=======
+void get(char input[]);
+void cd(char input[]);
+void ls();
 
 int main()
 {
@@ -227,6 +232,11 @@ int main()
 
     }
 
+    }
+    else if(strcmp(token[0],"volume")==0)
+    {
+
+    }
 
     free( working_root );
 
@@ -338,8 +348,7 @@ void popRootDir(FILE *fp, struct fatSpec* specs)
 
         fread(&dir[i],sizeof(struct DirectoryEntry),1,fp);
 
-        dir[i].DIR_Name[12] = '\0';
-
+	dir[i].DIR_Name[12] = '\0';
         //changes the file name to lowercase to be case insensitive
         char* dirName = dir[i].DIR_Name;
         stringToLower(dirName);
@@ -442,3 +451,27 @@ int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp)
 }
 
 
+void cd(char input[])
+{
+
+}
+
+void ls()
+{
+    int i;
+	
+    //populates the home directory
+    for(i=0;i<16;i++)
+    {
+
+ 
+        dir[i].DIR_Name[12] = '\0';
+
+        //changes the file name to lowercase to be case insensitive
+        char* dirName = dir[i].DIR_Name;
+        stringToLower(dirName);
+	if (dir[i].DIR_Attr == 0x01 || dir[i].DIR_Attr == 0x10 || dir[i].DIR_Attr == 0x20)
+        	printf("filename: %s\n", dir[i].DIR_Name);
+ 
+    }
+}
