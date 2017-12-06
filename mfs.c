@@ -41,7 +41,7 @@
 
 #define MAX_NUM_ARGUMENTS 5     // Mav shell only supports five arguments
 
-#define CLOSED 0                //file is CLOSED
+#define CLOSED 0	                //file is CLOSED
 
 #define OPEN 1                  //file is open
 
@@ -74,6 +74,9 @@ void stringToLower(char* str);
 int fileNameCmp(char input[], char strp[]);
 void popRootDir(FILE *fp, struct fatSpec* specs);
 void stat(char input[]);
+void get(char input[]);
+void cd(char input[]);
+void ls();
 
 int main()
 {
@@ -185,7 +188,26 @@ int main()
 
         stat(token[1]);
     }
+    else if(strcmp(token[0],"get")==0)
+    {
+	get(token[1]);
+    }
+    else if(strcmp(token[0],"cd")==0)
+    {
+	cd[token[1]);
+    }
+    else if(strcmp(token[0],"ls")==0)
+    {
+	ls();
+    }
+    else if(strcmp(token[0],"read")==0)
+    {
 
+    }
+    else if(strcmp(token[0],"volume")==0)
+    {
+
+    }
 
     free( working_root );
 
@@ -296,8 +318,7 @@ void popRootDir(FILE *fp, struct fatSpec* specs)
 
         fread(&dir[i],sizeof(struct DirectoryEntry),1,fp);
 
-        dir[i].DIR_Name[12] = '\0';
-
+	dir[i].DIR_Name[12] = '\0';
         //changes the file name to lowercase to be case insensitive
         char* dirName = dir[i].DIR_Name;
         stringToLower(dirName);
@@ -341,5 +362,57 @@ void stat(char input[])
         printf("attribute %#02x\n",dir[i].DIR_Attr);
         printf("Starting Cluster Number: %u\n",dir[i].DIR_FirstClusterLow);
         printf("File size: %"PRIu32"\n",dir[i].DIR_FileSize);
+    }
+}
+
+void get(char input[])
+{
+    int i = 0;
+
+    //no file name given
+    if(input == NULL)
+    {
+        printf("Error: File not found\n");
+        return;
+    }
+
+    //changes the given file name to lowercase to be case insensitive
+    char* tok = input;
+    stringToLower(tok);
+
+    //searches the structure for the file
+    while(fileNameCmp(input,dir[i].DIR_Name)==0&&i<16)
+    {
+        i++;
+    }
+    FILE * of;
+    of = fopen(dir[i].DIR_Name, "w");
+    // need to implement 'read' for data of file
+    fwrite(&dir[i],sizeof(struct DirectoryEntry),1,of);
+    fclose(of);
+}
+
+void cd(char input[])
+{
+
+}
+
+void ls()
+{
+    int i;
+	
+    //populates the home directory
+    for(i=0;i<16;i++)
+    {
+
+ 
+        dir[i].DIR_Name[12] = '\0';
+
+        //changes the file name to lowercase to be case insensitive
+        char* dirName = dir[i].DIR_Name;
+        stringToLower(dirName);
+	if (dir[i].DIR_Attr == 0x01 || dir[i].DIR_Attr == 0x10 || dir[i].DIR_Attr == 0x20)
+        	printf("filename: %s\n", dir[i].DIR_Name);
+ 
     }
 }
