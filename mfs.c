@@ -67,6 +67,7 @@ struct fatSpec
 };
 
 struct DirectoryEntry dir[16];
+FILE* writeFile;
 
 void getInfo(FILE *fp, struct fatSpec* specs);
 void printInfo(struct fatSpec* specs);
@@ -74,12 +75,16 @@ void stringToLower(char* str);
 int fileNameCmp(char input[], char strp[]);
 void popRootDir(FILE *fp, struct fatSpec* specs);
 void stat(char input[]);
+int LBAToOffset(int32_t sector, struct fatSpec* specs);
+int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp);
+void get(char input[], struct fatSpec* specs, FILE* fp);
 
 int main()
 {
   //keeps track if the file is open or closed
   int filestat = CLOSED;
   FILE* fp;
+
   struct fatSpec* specs = (struct fatSpec*)malloc(sizeof(struct fatSpec));
 
 
@@ -185,6 +190,42 @@ int main()
 
         stat(token[1]);
     }
+    else if(strcmp(token[0],"get")==0)
+    {
+        if(token[1]==NULL)
+            printf("Error: file not found\n");
+        else
+            get(token[1],specs, fp);
+    }
+    else if(strcmp(token[0],"read")==0)
+    {
+        if(token[3]==NULL)
+            printf("Please specify the number of bytes\n")
+        else if(token[2]==NULL)
+            printf("Please specify the starting byte\n")
+        else if(token[1]==NULL)
+            printf("Please give a filename\n")
+        else
+        {
+            int i = 0;
+            while(fileNameCmp(token[1],dir[i].DIR_Name)==0&&i<16)
+            {
+                i++;
+            }
+
+            //prints the attributes if the file exists
+            if(i==16) printf("Error: File not found\n");
+            else
+            {
+                int len = atoi(token[3]);
+                char data[len];
+                //set the file pointer
+                fread(data, sizeof(data), 1, fp)
+                printf(data);
+            }
+        }
+
+    }
 
 
     free( working_root );
@@ -192,6 +233,7 @@ int main()
   }
 
   free(specs);
+  fclose(fp);
   return 0;
 
 }
@@ -301,10 +343,12 @@ void popRootDir(FILE *fp, struct fatSpec* specs)
         //changes the file name to lowercase to be case insensitive
         char* dirName = dir[i].DIR_Name;
         stringToLower(dirName);
-
+/*
         printf("filename: %s\n", dir[i].DIR_Name);
         printf("attribute: %#02x\n", dir[i].DIR_Attr);
         printf("file size: %"PRIu32"\n", dir[i].DIR_FileSize);
+        */
+
 
 
     }
@@ -340,6 +384,61 @@ void stat(char input[])
     {
         printf("attribute %#02x\n",dir[i].DIR_Attr);
         printf("Starting Cluster Number: %u\n",dir[i].DIR_FirstClusterLow);
-        printf("File size: %"PRIu32"\n",dir[i].DIR_FileSize);
+        printf("File size: %"PRIu16"\n",dir[i].DIR_FileSize);
     }
 }
+
+void get(char input[], struct fatSpec* specs, FILE* fp)
+{
+    int i = 0;
+    while(fileNameCmp(input,dir[i].DIR_Name)==0&&i<16) i++;
+    if(i>=16)
+        printf("Error: file not found\n");
+    else
+    {
+
+        writeFile = fopen(input,"w");
+
+        int32_t cluster = dir[i].DIR_FirstClusterLow;
+        int clusSize = (specs->BPB_SecPerClus*specs->BPB_BytsPerSec);
+        printf("clusSize: %n\n",clusSize);
+
+        while(cluster!=-1)
+        {
+
+            char data[clusSize];
+            int address = LBAToOffset(cluster, specs);
+            fseek(fp,address,SEEK_SET );
+
+            fread(data, sizeof(data), 1, fp);
+
+            printf("Data:%s\n", data);
+            fwrite(data,1, sizeof(data), writeFile);
+            cluster = NextLB(cluster, specs, fp);
+        }
+
+
+
+        fclose(writeFile);
+
+    }
+}
+
+
+//gives location of block of data given the sector
+int LBAToOffset(int32_t sector, struct fatSpec* specs)
+{
+    return ((sector-2) * specs->BPB_BytsPerSec) + (specs->BPB_BytsPerSec * specs->BPB_RsvdSecCnt)
+        + (specs->BPB_NumFats * specs->BPB_FATSz32 * specs->BPB_BytsPerSec);
+}
+//gives the address of the next block of data given a sector
+int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp)
+{
+    uint32_t FATAddress = (specs->BPB_BytsPerSec * specs->BPB_RsvdSecCnt) + (sector*4);
+    uint16_t val;
+    fseek(fp, FATAddress, SEEK_SET);
+    fread (&val, 2, 1, fp);
+    return val;
+}
+
+
