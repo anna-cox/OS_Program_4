@@ -222,6 +222,7 @@ int main()
         }
 
     }
+	//calls the function to print the volume name placed into the specs struct by getInfo()
     else if(strcmp(token[0],"volume")==0)
     {
 	printVol(specs);
@@ -235,10 +236,11 @@ int main()
     {
 	int index, offset, j;
 	if(token[1] != NULL)
-	{
+	{			//grab all listed folders
 	    char * working_token = (char *) strtok(token[1], "/");
 	    while(working_token != NULL)
 	    {
+		//parent directory
 		if(strcmp(working_token, "..")==0)
 		{
 		    if(dir[1].DIR_Attr == 0x10 && dir[1].DIR_FirstClusterLow != 0)
@@ -246,8 +248,10 @@ int main()
 		    else
 			offset = (specs->BPB_NumFats * specs->BPB_FATSz32 * specs->BPB_BytsPerSec) + (specs->BPB_RsvdSecCnt * specs->BPB_BytsPerSec);
 		}
+		//this directory
 		else if(!strcmp(working_token, "."))
 		    continue;
+		//find new directory
 		else
 		{
 		    index = findFile(working_token);
@@ -256,13 +260,17 @@ int main()
 		    else
 			printf("Error: Specified folder or path not found in file system\n");
 		}
+		//if found, go to cluster of this directory
 		fseek(fp, offset, SEEK_SET);
                 for(j=0; j<16; j++)
 		{
+		    //empty the previously built directory array
 		    memset(&dir[j].DIR_Name,0,32);
+		    //fill directory array based on contents of new working directory
 		    fread(&dir[j],sizeof(struct DirectoryEntry),1,fp);
 		    dir[j].DIR_Name[12] = '\0';
 		}
+		//move to next file/directory in path
 		working_token = strtok(NULL,"/");
 	    };
 	}
@@ -499,13 +507,16 @@ void ls()
         //changes the file name to lowercase to be case insensitive
         char* dirName = dir[i].DIR_Name;
         stringToLower(dirName);
+	//checks for contents of directory array that ARE valid, non-deleted files/directories
 	if ((dir[i].DIR_Attr == 0x01 || dir[i].DIR_Attr == 0x10 || dir[i].DIR_Attr == 0x20 || dir[i].DIR_Attr == 0x30) && dir[i].DIR_Name[0] != 0xffffffe5)
+		//output detailed information of each file:
+		//cluster, size, type, and name (similar to linux bash ls -l (ll)
         	printf("%d\t%d\t%x\t%s\n",dir[i].DIR_FirstClusterLow, dir[i].DIR_FileSize, dir[i].DIR_Attr, dir[i].DIR_Name);
 
     }
 }
 
-
+//function to find an input file within the directory array
 int findFile(char * operand)
 {
     int k;
