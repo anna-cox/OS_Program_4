@@ -75,12 +75,12 @@ void stringToLower(char* str);
 int fileNameCmp(char input[], char strp[]);
 void popRootDir(FILE *fp, struct fatSpec* specs);
 void stat(char input[]);
-<<<<<<< HEAD
+
 int LBAToOffset(int32_t sector, struct fatSpec* specs);
 int16_t NextLB(uint32_t sector, struct fatSpec* specs, FILE* fp);
 void get(char input[], struct fatSpec* specs, FILE* fp);
-=======
-void get(char input[]);
+
+
 void cd(char input[]);
 void ls();
 
@@ -205,11 +205,11 @@ int main()
     else if(strcmp(token[0],"read")==0)
     {
         if(token[3]==NULL)
-            printf("Please specify the number of bytes\n")
+            printf("Please specify the number of bytes\n");
         else if(token[2]==NULL)
-            printf("Please specify the starting byte\n")
+            printf("Please specify the starting byte\n");
         else if(token[1]==NULL)
-            printf("Please give a filename\n")
+            printf("Please give a filename\n");
         else
         {
             int i = 0;
@@ -225,12 +225,10 @@ int main()
                 int len = atoi(token[3]);
                 char data[len];
                 //set the file pointer
-                fread(data, sizeof(data), 1, fp)
+                fread(data, sizeof(data), 1, fp);
                 printf(data);
             }
         }
-
-    }
 
     }
     else if(strcmp(token[0],"volume")==0)
@@ -459,12 +457,12 @@ void cd(char input[])
 void ls()
 {
     int i;
-	
+
     //populates the home directory
     for(i=0;i<16;i++)
     {
 
- 
+
         dir[i].DIR_Name[12] = '\0';
 
         //changes the file name to lowercase to be case insensitive
@@ -472,6 +470,6 @@ void ls()
         stringToLower(dirName);
 	if (dir[i].DIR_Attr == 0x01 || dir[i].DIR_Attr == 0x10 || dir[i].DIR_Attr == 0x20)
         	printf("filename: %s\n", dir[i].DIR_Name);
- 
+
     }
 }
